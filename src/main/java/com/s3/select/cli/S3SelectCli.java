@@ -16,9 +16,11 @@ import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.DefaultAwsRegionProviderChain;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.CSVInput;
 import com.amazonaws.services.s3.model.CompressionType;
 import com.amazonaws.services.s3.model.ExpressionType;
 import com.amazonaws.services.s3.model.InputSerialization;
+import com.amazonaws.services.s3.model.JSONInput;
 import com.amazonaws.services.s3.model.JSONOutput;
 import com.amazonaws.services.s3.model.OutputSerialization;
 import com.amazonaws.services.s3.model.ParquetInput;
@@ -50,6 +52,7 @@ public class S3SelectCli {
         
         String bucket = line.getOptionValue(BUCKET_KEY);
         String key = line.getOptionValue(S3_KEY);
+        String format = line.getOptionValue("format");
         
         AmazonS3 s3Client = AmazonS3ClientBuilder.standard()
                 .withRegion(new DefaultAwsRegionProviderChain().getRegion())
@@ -62,7 +65,7 @@ public class S3SelectCli {
             Optional<String> query = getNextQuery(scanner, bucket, key);
 
             if (query.isPresent()) {
-                execute(s3Client, bucket, key, query.get());
+                execute(s3Client, bucket, key, query.get(), format);
             } else {
                 System.out.println("BYE");
                 break;
@@ -76,6 +79,7 @@ public class S3SelectCli {
         Options options = new Options();
         options.addOption(Option.builder("b").longOpt("bucket").hasArg().desc("The S3 bucket").required().build());
         options.addOption(Option.builder("k").longOpt("key").hasArg().desc("The S3 file key").required().build());
+        options.addOption(Option.builder("f").longOpt("format").hasArg().desc("The file format").required().build());
         return options;
     }
 
@@ -110,16 +114,16 @@ public class S3SelectCli {
         System.out.print("s3_select> ");
     }
 
-    private static void execute(AmazonS3 s3Client, String bucket, String key, String query) {
+    private static void execute(AmazonS3 s3Client, String bucket, String key, String query, String format) {
         try {
-            run(s3Client, bucket, key, query);
+            run(s3Client, bucket, key, query, format);
         } catch (Exception ex) {
             System.out.println("ERROR: " + ex.getMessage());
         }
     }
 
-    private static void run(AmazonS3 s3Client, String bucket, String key, String query) throws Exception {
-        SelectObjectContentRequest request = generateBaseParquetRequest(bucket, key, query);
+    private static void run(AmazonS3 s3Client, String bucket, String key, String query, String format) throws Exception {
+        SelectObjectContentRequest request = generateBaseRequest(bucket, key, query, format);
         final long startTime = System.nanoTime();
 
         try (SelectObjectContentResult result = s3Client.selectObjectContent(request)) {
@@ -142,7 +146,7 @@ public class S3SelectCli {
         }
     }
 
-    private static SelectObjectContentRequest generateBaseParquetRequest(String bucket, String key, String query) {
+    private static SelectObjectContentRequest generateBaseRequest(String bucket, String key, String query, String format) {
         SelectObjectContentRequest request = new SelectObjectContentRequest();
         request.setBucketName(bucket);
         request.setKey(key);
@@ -150,7 +154,20 @@ public class S3SelectCli {
         request.setExpressionType(ExpressionType.SQL);
 
         InputSerialization inputSerialization = new InputSerialization();
-        inputSerialization.setParquet(new ParquetInput());
+        
+        
+        if("parquet".equals(format)) {
+            inputSerialization.setParquet(new ParquetInput());
+        }
+        
+        if("csv".equals(format)) {
+            inputSerialization.setCsv(new CSVInput());
+        }
+        
+        if("json".equals(format)) {
+            inputSerialization.setJson(new JSONInput());
+        }
+        
         inputSerialization.setCompressionType(CompressionType.NONE);
         request.setInputSerialization(inputSerialization);
 
