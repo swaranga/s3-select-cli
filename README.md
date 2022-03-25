@@ -1,6 +1,6 @@
 # s3-select-cli
 
-A simple CLI to execute S3 select queries.
+A simple REPL to execute S3 select queries.
 
 ## Build
 ```
